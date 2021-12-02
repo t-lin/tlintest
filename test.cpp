@@ -16,7 +16,7 @@ void producer(int n, ByteChannel& chan) {
 
 int main() {
   int numItems = 200;
-  ByteChannel byteChan(199);
+  ByteChannel byteChan(1);
 
   // Consumer in main thread
   thread prod(producer, numItems, std::ref(byteChan));

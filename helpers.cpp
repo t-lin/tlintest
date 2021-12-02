@@ -1,4 +1,5 @@
-#include <javad_gnss/helpers.hpp>
+#include "helpers.hpp"
+//#include <javad_gnss/helpers.hpp>
 
 // C++ headers
 #include <functional> // For std::bind
@@ -6,6 +7,7 @@
 using std::mutex;
 using std::unique_lock;
 using std::vector;
+using std::condition_variable;
 
 /***************************************
  * Definitions for class ByteChannel
@@ -48,7 +50,32 @@ bool ByteChannel::IsClosed() {
   return closed_;
 }
 
-/* Returns
+/* Helper function for Put()
+ * If the channel is full, wait until it has room to write.
+ * Should be called by a thread that has the lock.
+ * Returns:
+ *  - true if caller can proceed with writing to the channel
+ *  - false otherwise (caller should give up trying to write)
+ */
+inline bool ByteChannel::isWritable_(unique_lock<mutex>& lock, bool wait) {
+  if (closed_) {
+    return false;
+  }
+
+  if ( buf_.size() >= maxSize_ ) {
+    if (wait) {
+      freeSlot_.wait(lock, std::bind(&ByteChannel::notFull_, this));
+    } else {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/* Writes 'item' into the channel. If the channel is full and 'wait' is
+ * true, then block until there is free space in the channel to write.
+ * Returns
  *  - true if the item was successfully written
  *  - false if the item was not written
  *      - A return value of false may indicate that the channel is full
@@ -62,44 +89,28 @@ bool ByteChannel::IsClosed() {
 bool ByteChannel::Put(const uint8_t& item, bool wait) {
   unique_lock<mutex> lock(bufMtx_);
 
-  if (closed_) {
-    //throw logic_error("ERROR: Attempting to put on a closed channel\n");
+  if ( !isWritable_(lock, wait) ) {
     return false;
-  }
-
-  if ( buf_.size() >= maxSize_ ) {
-    if (wait) {
-      newData_.wait(lock, std::bind(&ByteChannel::notFull_, this));
-    } else {
-      return false;
-    }
   }
 
   buf_.push_back(item);
   lock.unlock();
   newData_.notify_one();
+
   return true;
 }
 
 bool ByteChannel::Put(const uint8_t* const items, const size_t n, bool wait) {
   unique_lock<mutex> lock(bufMtx_);
 
-  if (closed_) {
-    //throw logic_error("ERROR: Attempting to put on a closed channel\n");
+  if ( !isWritable_(lock, wait) ) {
     return false;
-  }
-
-  if ( buf_.size() >= maxSize_ ) {
-    if (wait) {
-      newData_.wait(lock, std::bind(&ByteChannel::notFull_, this));
-    } else {
-      return false;
-    }
   }
 
   buf_.insert(buf_.end(), items, items + n);
   lock.unlock();
   newData_.notify_one();
+
   return true;
 }
 
@@ -107,7 +118,9 @@ bool ByteChannel::Put(const vector<uint8_t>& items, bool wait) {
   return this->Put(items.data(), items.size(), wait);
 }
 
-/* Returns:
+/* Reads an item from the channel and stores it into 'item'.
+ * If the channel is empty and 'wait' is true, block until an item exists.
+ * Returns:
  *  - true if an item was successfully read
  *  - false if an item was not read
  *      - NOTE: If 'false' is returned, should check whether the channel
@@ -125,6 +138,7 @@ bool ByteChannel::Get(uint8_t& item, bool wait) {
 
   item = buf_.front();
   buf_.erase(buf_.begin());
+  freeSlot_.notify_one();
   return true;
 }
 
@@ -149,6 +163,7 @@ size_t ByteChannel::Get(vector<uint8_t>& dst, size_t n, bool wait) {
 
   dst.insert(dst.end(), buf_.begin(), buf_.begin() + n);
   buf_.erase(buf_.begin(), buf_.begin() + n);
+  freeSlot_.notify_one();
   return n;
 }
 

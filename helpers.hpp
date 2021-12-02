@@ -26,10 +26,20 @@ class ByteChannel {
     std::vector<uint8_t> buf_;
     std::mutex bufMtx_;
     std::condition_variable newData_;
+    std::condition_variable freeSlot_;
     bool closed_ = false;
 
-    bool exitGetWait_();
+    /* Helper function for Put()
+     * If the channel is full, wait until it has room to write.
+     * Should be called by a thread that has the lock.
+     * Returns:
+     *  - true if caller can proceed with writing to the channel
+     *  - false otherwise (caller should give up trying to write)
+     */
+    bool isWritable_(std::unique_lock<std::mutex>& lock, bool wait);
 
+    // Predicates for wait conditions
+    bool exitGetWait_();
     bool notFull_ ();
 
   public:
@@ -49,7 +59,9 @@ class ByteChannel {
 
     bool IsClosed();
 
-    /* Returns
+    /* Writes 'item' into the channel. If the channel is full and 'wait' is
+     * true, then block until there is free space in the channel to write.
+     * Returns
      *  - true if the item was successfully written
      *  - false if the item was not written
      *      - A return value of false may indicate that the channel is full
@@ -66,7 +78,9 @@ class ByteChannel {
 
     bool Put(const std::vector<uint8_t>& items, bool wait = true);
 
-    /* Returns:
+    /* Reads an item from the channel and stores it into 'item'.
+     * If the channel is empty and 'wait' is true, block until an item exists.
+     * Returns:
      *  - true if an item was successfully read
      *  - false if an item was not read
      *      - NOTE: If 'false' is returned, should check whether the channel

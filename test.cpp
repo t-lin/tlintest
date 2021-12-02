@@ -1,13 +1,15 @@
 #include <iostream>
 #include <thread>
 
-#include "helpers.hpp"
+#include <stdint.h>
+
+#include "channel.hpp"
 
 using namespace std;
 
-void producer(int n, ByteChannel& chan) {
+void producer(int n, Channel<uint8_t>& chan) {
   for (int i = 0; i < n; i++) {
-    chan.Put((unsigned char)(i % 255));
+    chan.Put((uint8_t)(i % 255));
 
   }
   return;
@@ -16,7 +18,7 @@ void producer(int n, ByteChannel& chan) {
 
 int main() {
   int numItems = 200;
-  ByteChannel byteChan(1);
+  Channel<uint8_t> byteChan(1);
 
   // Consumer in main thread
   thread prod(producer, numItems, std::ref(byteChan));

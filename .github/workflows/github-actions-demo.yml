@@ -6,7 +6,17 @@ on:
     branches: [master]
 
 jobs:
+  find_duplicate_run:
+    runs-on: ubuntu-latest
+    # Map a step output to a job output
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@master
   checkout-build-test:
+    needs: find_duplicate_run
+    if: ${{ needs.find_duplicate_run.outputs.should_skip != 'true' }}
     runs-on: ubuntu-latest
     steps:
     - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event on behalf of ${{ github.actor }}."

@@ -1,0 +1,24 @@
+name: tlintest action on assigned
+on:
+  issues:
+    types:
+      - assigned
+
+jobs:
+  move-to-column:
+    runs-on: ubuntu-latest
+    # Map a step output to a job output
+    #outputs:
+    #  should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    #steps:
+    #  - id: skip_check
+    #    uses: fkirc/skip-duplicate-actions@master
+    steps:
+      - id: tlintest-action
+        uses: t-lin/github-project-automation-plus@vtlin
+        with:
+          column: In progress
+          repo-token: ${{ secrets.TLIN_SECRET }}
+        #uses: t-lin/tlintest-action@v1.1.0
+        #with:
+        #  milliseconds: 1234

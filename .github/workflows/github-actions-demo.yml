@@ -1,13 +1,13 @@
 name: GitHub Actions Demo
 on:
   push:
-    branches: [master]
+    branches: [master, testfail]
   pull_request:
-    branches: [master]
+    branches: [master, testfail]
 
 jobs:
   find_duplicate_run:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted 
     # Map a step output to a job output
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
